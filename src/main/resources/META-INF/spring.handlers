@@ -1,1 +1,1 @@
-urn\:global\:gfipm\:1.1\:bae-resolver = net.gfipm.shibboleth.config.GFIPMNamespaceHandler
+urn\:global\:gfipm\:1.3\:bae-resolver = net.gfipm.shibboleth.config.GFIPMNamespaceHandler
