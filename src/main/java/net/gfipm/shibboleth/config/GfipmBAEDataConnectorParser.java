@@ -26,7 +26,7 @@ import javax.annotation.Nonnull;
 import javax.xml.namespace.QName;
 
 import net.shibboleth.ext.spring.util.SpringSupport;
-import net.shibboleth.idp.attribute.resolver.spring.dc.AbstractDataConnectorParser;
+import net.shibboleth.idp.attribute.resolver.spring.dc.impl.AbstractDataConnectorParser;
 import net.shibboleth.idp.attribute.IdPAttribute;
 import net.shibboleth.idp.attribute.StringAttributeValue;
 import net.shibboleth.utilities.java.support.xml.AttributeSupport;
@@ -71,7 +71,7 @@ public class GfipmBAEDataConnectorParser extends AbstractDataConnectorParser {
 
         long timeLimit = 5000;  // Default to 5s
 
-        final String baeURL    = AttributeSupport.getAttributeValue(config, new QName("baeURL"));
+        final String baeUrl    = AttributeSupport.getAttributeValue(config, new QName("baeUrl"));
         final String subjectId = AttributeSupport.getAttributeValue(config, new QName("subjectId"));
         final String baeEntId  = AttributeSupport.getAttributeValue(config, new QName("baeEntityId"));
         final String myEntId   = AttributeSupport.getAttributeValue(config, new QName("myEntityId"));
@@ -79,9 +79,9 @@ public class GfipmBAEDataConnectorParser extends AbstractDataConnectorParser {
         //   timeLimit = AttributeSupport.getAttribute(config, new QName("searchTimeLimit")).getDateTimeAttributeAsLong();
         //}
 
-        log.debug("Parsing configuration baeURL {}, baeId {}, myId {}, subject attribute {}", baeURL, baeEntId, myEntId, subjectId);
+        log.debug("Parsing configuration baeUrl {}, baeId {}, myId {}, subject attribute {}", baeUrl, baeEntId, myEntId, subjectId);
 
-        builder.addPropertyValue("baeURL", baeURL );
+        builder.addPropertyValue("baeUrl", baeUrl );
         builder.addPropertyValue("subjectId", subjectId);
         builder.addPropertyValue("baeEntityId", baeEntId);
         builder.addPropertyValue("myEntityId", myEntId);

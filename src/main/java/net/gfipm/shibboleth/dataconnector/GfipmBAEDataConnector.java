@@ -11,6 +11,7 @@ package net.gfipm.shibboleth.dataconnector;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -41,8 +42,11 @@ import net.shibboleth.utilities.java.support.logic.Constraint;
 
 
 import org.opensaml.security.x509.X509Credential;
+import org.opensaml.security.credential.Credential;
+
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+
 
 import org.gtri.gfipm.bae.v2_0.SubjectIdentifier;
 import org.gtri.gfipm.bae.v2_0.EmailSubjectIdentifier;
@@ -73,7 +77,7 @@ public class GfipmBAEDataConnector extends AbstractDataConnector {
     /** Log4j logger. */
     @NonnullAfterInit private final Logger log =  LoggerFactory.getLogger(GfipmBAEDataConnector.class);
 
-    private String baeURL;
+    private String baeUrl;
     private String subjectId;
     private String baeEntityId;
     private String myEntityId;
@@ -84,8 +88,8 @@ public class GfipmBAEDataConnector extends AbstractDataConnector {
     private Map<String,String>        baeAttrMap;
 
     /** Trust material used when connecting to the server over https. */
-    private X509Credential  x509Trust;
-    private X509Credential  x509Key;
+    private Credential  x509Trust;
+    private Credential  x509Key;
     private X509Certificate myCert;
     private PrivateKey      myKey;
     private List<X509Certificate> serverCerts;
@@ -113,10 +117,10 @@ public class GfipmBAEDataConnector extends AbstractDataConnector {
     }
     public void setBaeUrl(@Nullable String url) {
         ComponentSupport.ifInitializedThrowUnmodifiabledComponentException(this);
-        baeURL = StringSupport.trimOrNull(url);
+        baeUrl = StringSupport.trimOrNull(url);
     }
     @NonnullAfterInit public String getBaeUrl() {
-        return baeURL;
+        return baeUrl;
     }
     public void setMyEntityId(@Nullable String id) {
         ComponentSupport.ifInitializedThrowUnmodifiabledComponentException(this);
@@ -138,6 +142,28 @@ public class GfipmBAEDataConnector extends AbstractDataConnector {
     }
     @NonnullAfterInit public String getSubjectId() {
         return subjectId;
+    }
+
+    private String getPrincipal (
+            @Nonnull final AttributeResolutionContext resolutionContext,
+            @Nonnull final AttributeResolverWorkContext workContext) {
+
+        final Map<String,List<IdPAttributeValue<?>>> dependencyAttributes =
+                PluginDependencySupport.getAllAttributeValues(workContext, getDependencies());
+
+
+        for (final Entry<String,List<IdPAttributeValue<?>>> dependencyAttribute : dependencyAttributes.entrySet()) {
+            log.debug("Adding dependent attribute '{}' with the following values to the connector context: {}",
+                      dependencyAttribute.getKey(), dependencyAttribute.getValue());
+              if ( dependencyAttribute.getKey() == subjectId ) {
+                 String principalObjString = dependencyAttribute.getValue().toString();
+                 int start = principalObjString.indexOf ('=');
+                 int end   = principalObjString.indexOf ('}');
+                 return principalObjString.substring (start + 1, end);
+              }
+        }
+
+        return null;
     }
 
 
@@ -189,15 +215,9 @@ public class GfipmBAEDataConnector extends AbstractDataConnector {
             log.warn("Source attribute " + subjectId + " for connector " + getId() +" has more than one value, just using the first.");
         }
 
-        for (final Map.Entry<String, List<IdPAttributeValue<?>>> entry : dependencyAttributes.entrySet()) {
-             log.debug("Adding dependency {} to context with {} value(s)", entry.getKey(), entry.getValue());
-        }
-
-        String strPrincipal = "blah - gotta look at trace output and figure out what goes here";
+        String strPrincipal = getPrincipal (resolutionContext, workContext);
 
         log.debug ("Querying for Id : " + strPrincipal );
-
-
 
         try {
 //           SubjectIdentifier identifier = new FASCNSubjectIdentifier (strPrincipal);
@@ -205,7 +225,6 @@ public class GfipmBAEDataConnector extends AbstractDataConnector {
 
            Collection<BackendAttribute> attributes = baeServer.attributeQuery(identifier);
 
-           // TBD Integrate BAE Interface
            for (BackendAttribute a : attributes) {
               
               // If we find this attribute in our map, then it is an attribute we process 
@@ -238,23 +257,27 @@ public class GfipmBAEDataConnector extends AbstractDataConnector {
      * 
      * @return <code>TrustManager[]</code>
      */
-    public X509Credential getX509Trust() {
+    public Credential getTrustCredential () {
         return x509Trust;
     }
 
     /**
      * This sets the trust manager that will be used for BAE queries.
      * 
-     * @param tc <code>X509Credential</code> to create TrustManagers with
+     * @param tc <code>Credential</code> to create TrustManagers with
      */
-    public void setX509Trust(X509Credential tc) {
-       /* TBD - based on BAE API */
+    public void setTrustCredential (Credential tc) {
        x509Trust = tc;
-       Collection<X509Certificate> coll = tc.getEntityCertificateChain();
-       if (coll instanceof List)
-          serverCerts = (List)coll;
-       else
-          serverCerts = new ArrayList(coll);
+       if (tc != null) {
+         if (tc instanceof X509Credential) {
+           X509Credential trust = (X509Credential) tc;
+           Collection<X509Certificate> coll = trust.getEntityCertificateChain();
+         if (coll instanceof List)
+            serverCerts = (List)coll;
+         else
+            serverCerts = new ArrayList(coll);
+        }
+      }
     }
 
     /**
@@ -262,8 +285,7 @@ public class GfipmBAEDataConnector extends AbstractDataConnector {
      * 
      * @return <code>KeyManager[]</code>
      */
-    public X509Credential getX509Key() {
-        /* TBD - based on BAE API */
+    public Credential getAuthCredential() {
         return x509Key;
     }
 
@@ -272,13 +294,17 @@ public class GfipmBAEDataConnector extends AbstractDataConnector {
      * 
      * @param kc <code>X509Credential</code> to create KeyManagers with
      */
-    public void setX509Key (X509Credential kc) {
-         /* TBD - based on BAE API */
-         x509Key = kc;
-         myKey  = kc.getPrivateKey();
-         myCert = kc.getEntityCertificate();
-//         log.debug ("myKey = {}",  myKey);
-//         log.debug ("myCert = {}", myCert);
+    public void setAuthCredential (X509Credential kc) {
+      x509Key = kc;
+      if ( kc != null) {
+        if (kc instanceof X509Credential) {
+          X509Credential keypair = (X509Credential) kc;
+          myKey  = keypair.getPrivateKey();
+          myCert = keypair.getEntityCertificate();
+          log.debug ("myKey = {}",  myKey);
+          log.debug ("myCert = {}", myCert);
+        }
+      }
     }
 
     public void setBaeAttributes(List<BAEAttributeNameMap> list) {
@@ -294,7 +320,7 @@ public class GfipmBAEDataConnector extends AbstractDataConnector {
     @Override
     protected void doInitialize() throws ComponentInitializationException {
 
-        if (null == baeURL) {
+        if (null == baeUrl) {
             throw new ComponentInitializationException(getLogPrefix() + " No BAE Responder URL found.");
         }
         if (null == baeEntityId) {
@@ -319,10 +345,10 @@ public class GfipmBAEDataConnector extends AbstractDataConnector {
             throw new ComponentInitializationException(getLogPrefix() + " No Subject Identifier attribute found.");
         }
 
-       serverInfo = BAEServerInfoFactory.getInstance().createBAEServerInfo(baeURL, baeEntityId, serverCerts); 
+       serverInfo = BAEServerInfoFactory.getInstance().createBAEServerInfo(baeUrl, baeEntityId, serverCerts); 
        clientInfo = BAEClientInfoFactory.getInstance().createBAEClientInfo(myEntityId, myCert, myKey);
        Map<String,String> mapOptions = new HashMap<String,String> ();
-       mapOptions.put (WebServiceRequestOptions.CLIENT_CERT_AUTH, "false");
+       mapOptions.put (WebServiceRequestOptions.CLIENT_CERT_AUTH, "true");
        mapOptions.put (WebServiceRequestOptions.SERVER_CERT_AUTH, "false");
        WebServiceRequestOptions wsRequestOptions = WebServiceRequestOptionsFactory.getInstance().createWebServiceRequestOptions(mapOptions);
 
